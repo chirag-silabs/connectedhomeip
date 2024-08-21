@@ -1,9 +1,8 @@
 #include "EndpointQueueFilter.h"
 #include <string.h>
+#include <lib/support/BytesToHex.h>
 #include <support/CodeUtils.h>
 #include <support/logging/CHIPLogging.h>
-#include <string_view>
-
 namespace chip {
 namespace Inet {
 
@@ -11,11 +10,11 @@ using FilterOutcome = EndpointQueueFilter::FilterOutcome;
 
 namespace {
 
-bool IsValidMdnsHostName(uint8_t * hostName)
+bool IsValidMdnsHostName(const CharSpan & hostName)
 {
-    for (size_t i = 0; i < sizeof(hostName); ++i)
+    for (size_t i = 0; i < hostName.size(); ++i)
     {
-        char ch_data = hostName[i];
+        char ch_data = *(hostName.data() + i);
         if (!((ch_data >= '0' && ch_data <= '9') || (ch_data >= 'A' && ch_data <= 'F')))
         {
             return false;
@@ -24,16 +23,36 @@ bool IsValidMdnsHostName(uint8_t * hostName)
     return true;
 }
 
-bool IsMdnsBroadcastPacket(const void * endpoint, const IPPacketInfo & pktInfo, const System::PacketBufferHandle & pktPayload)
+bool IsMdnsBroadcastPacket(const IPPacketInfo & pktInfo, const System::PacketBufferHandle & pktPayload)
 {
     // if the packet is not a broadcast packet to mDNS port, drop it.
     VerifyOrReturnValue(pktInfo.DestPort == 5353, false);
 #if INET_CONFIG_ENABLE_IPV4
     ip_addr_t mdnsIPv4BroadcastAddr = IPADDR4_INIT_BYTES(224, 0, 0, 251);
-    VerifyOrReturnValue(pktInfo.DestAddress == Inet::IPAddress(mdnsIPv4BroadcastAddr), false);
+    if(pktInfo.DestAddress == Inet::IPAddress(mdnsIPv4BroadcastAddr))
+    {
+        return true;
+    }
 #endif
     ip_addr_t mdnsIPv6BroadcastAddr = IPADDR6_INIT_HOST(0xFF020000, 0, 0, 0xFB);
-    VerifyOrReturnValue(pktInfo.DestAddress == Inet::IPAddress(mdnsIPv6BroadcastAddr), false);
+    if(pktInfo.DestAddress == Inet::IPAddress(mdnsIPv6BroadcastAddr))
+    {
+        return true;
+    }
+    return false;
+}
+
+static bool CaseInsensitiveCompare(const CharSpan & buffer1, const CharSpan & buffer2, size_t size)
+{
+    for (size_t i = 0; i < size; ++i)
+    {
+        char byte1 = (*(buffer1.data() + i) >= 'A' && *(buffer1.data() + i) <= 'Z') ? *(buffer1.data() + i) - 'A' + 'a' : *(buffer1.data() + i);
+        char byte2 = (*(buffer2.data() + i) >= 'A' && *(buffer2.data() + i) <= 'Z') ? *(buffer2.data() + i) - 'A' + 'a' : *(buffer2.data() + i);
+        if (byte1 != byte2)
+        {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -49,9 +68,17 @@ bool PayloadContainsCaseInsensitive(const System::PacketBufferHandle & payload, 
         return false;
     }
 
-    std::basic_string_view<uint8_t> payloadView(payload->Start(), payload->TotalLength());
-    std::basic_string_view<uint8_t> patternView(pattern.data(), pattern.size());
-    return payloadView.find(patternView) != std::basic_string_view<uint8_t>::npos;
+    CharSpan payloadView(reinterpret_cast<char *>(payload->Start()), payload->TotalLength());
+    CharSpan patternView((char *)(pattern.data()), pattern.size());
+
+    for (size_t i = 0; i <= payloadView.size() - patternView.size(); ++i)
+    {
+        if (CaseInsensitiveCompare(payloadView.SubSpan(i, patternView.size()), patternView, patternView.size()))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace
@@ -66,15 +93,13 @@ FilterOutcome HostNameFilter::Filter(const void * endpoint, const IPPacketInfo &
     {
         return FilterOutcome::kAllowPacket;
     }
-
     return FilterOutcome::kDropPacket;
 }
 
-CHIP_ERROR HostNameFilter::SetHostName(const ByteSpan & hostName)
+CHIP_ERROR HostNameFilter::SetHostName(const CharSpan & hostName)
 {
-    const uint8_t * p = hostName.data();
-    snprintf((char *) mHostName, sizeof(mHostName), "%02X%02X%02X%02X%02X%02X", p[0], p[1], p[2], p[3], p[4], p[5]);
-    ReturnErrorCodeIf(!IsValidMdnsHostName(mHostName), CHIP_ERROR_INVALID_ARGUMENT);
+    ReturnErrorCodeIf(!IsValidMdnsHostName(hostName), CHIP_ERROR_INVALID_ARGUMENT);
+    memcpy(mHostName, hostName.data(), hostName.size());
     return CHIP_NO_ERROR;
 }
 
@@ -90,7 +115,7 @@ FilterOutcome EndpointQueueFilter::FilterBeforeEnqueue(const void * endpoint, co
     VerifyOrReturnError(FilterOutcome::kAllowPacket == mTooManyFilter.FilterBeforeEnqueue(endpoint, pktInfo, pktPayload),
                         FilterOutcome::kDropPacket);
 
-    if (!IsMdnsBroadcastPacket(endpoint, pktInfo, pktPayload))
+    if (!IsMdnsBroadcastPacket(pktInfo, pktPayload))
     {
         return FilterOutcome::kAllowPacket;
     }

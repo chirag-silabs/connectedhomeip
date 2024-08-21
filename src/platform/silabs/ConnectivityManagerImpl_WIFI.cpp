@@ -18,6 +18,7 @@
 /* this file behaves like a config.h, comes first */
 #include <platform/internal/CHIPDeviceLayerInternal.h>
 
+#include <lib/support/BytesToHex.h>
 #include <lib/support/CodeUtils.h>
 #include <lib/support/logging/CHIPLogging.h>
 #include <platform/ConnectivityManager.h>
@@ -442,16 +443,22 @@ void ConnectivityManagerImpl::UpdateInternetConnectivityState(void)
         {
             sl_wfx_mac_address_t macaddr;
             wfx_get_wifi_mac_addr(SL_WFX_STA_INTERFACE, &macaddr);
-            if (mEndpointQueueFilter.SetHostName(ByteSpan(macaddr.octet)) == CHIP_NO_ERROR)
+            char macStr[12] = {0};
+            if(Encoding::BytesToHex(macaddr.octet, sizeof(macaddr.octet), macStr, sizeof(macStr),Encoding::HexFlags::kUppercase) == CHIP_NO_ERROR)
             {
-                chip::Inet::UDPEndPointImpl::SetQueueFilter(&mEndpointQueueFilter);
-            } else {
-                ChipLogError(DeviceLayer, "Failed to set host name filter");
-            } 
+                if (mEndpointQueueFilter.SetHostName(CharSpan(macStr)) == CHIP_NO_ERROR)
+                {
+                    chip::Inet::UDPEndPointImpl::SetQueueFilter(&mEndpointQueueFilter);
+                } else {
+                    ChipLogError(DeviceLayer, "Failed to set host name filter");
+                } 
+            }
+            else
+            {
+                ChipLogError(DeviceLayer, "Failed to convert MAC address to string");
+            }
         }
 #endif // CHIP_CONFIG_ENABLE_ICD_SERVER
-
-        (void) PlatformMgr().PostEvent(&event);
 
         if (haveIPv4Conn != hadIPv4Conn)
         {
