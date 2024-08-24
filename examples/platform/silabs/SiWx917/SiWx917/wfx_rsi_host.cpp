@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <platform/CHIPDeviceLayer.h>
 
 #include "FreeRTOS.h"
 #include "event_groups.h"
@@ -33,6 +34,17 @@ StackType_t wfxRsiTaskStack[WFX_RSI_TASK_SZ] = { 0 };
 
 /* Structure that will hold the TCB of the wfxRsi Task being created. */
 StaticTask_t wfxRsiTaskBuffer;
+
+constexpr uint32_t kWlanTaskSize = 2048;
+static uint8_t wlanStack[kWlanTaskSize];
+static osThread_t sWlanTaskControlBlock;
+constexpr osThreadAttr_t kWlanTaskAttr = { .name       = "wlan_rsi",
+                                           .attr_bits  = osThreadDetached,
+                                           .cb_mem     = &sWlanTaskControlBlock,
+                                           .cb_size    = osThreadCbSize,
+                                           .stack_mem  = wlanStack,
+                                           .stack_size = kWlanTaskSize,
+                                           .priority   = osPriorityRealtime };
 
 /*********************************************************************
  * @fn  sl_status_t wfx_wifi_start(void)
@@ -55,14 +67,18 @@ sl_status_t wfx_wifi_start(void)
     /*
      * Create the Wifi driver task
      */
-    wfx_rsi.wlan_task = xTaskCreateStatic(wfx_rsi_task, "wfx_rsi", WFX_RSI_TASK_SZ, NULL, WLAN_DRIVER_TASK_PRIORITY,
-                                          wfxRsiTaskStack, &wfxRsiTaskBuffer);
+    // wfx_rsi.wlan_task = xTaskCreateStatic(wfx_rsi_task, "wfx_rsi", WFX_RSI_TASK_SZ, NULL, WLAN_DRIVER_TASK_PRIORITY,
+    //                                       wfxRsiTaskStack, &wfxRsiTaskBuffer);
+    
+    wfx_rsi.wlan_thread = osThreadNew(wfx_rsi_task, NULL, &kWlanTaskAttr);
 
-    if (NULL == wfx_rsi.wlan_task)
-    {
-        SILABS_LOG("%s: error: failed to create task.", __func__);
-        return SL_STATUS_FAIL;
-    }
+    VerifyOrDie(wfx_rsi.wlan_thread != NULL);
+
+    // if (NULL == wfx_rsi.wlan_task)
+    // {
+    //     SILABS_LOG("%s: error: failed to create task.", __func__);
+    //     return SL_STATUS_FAIL;
+    // }
     return SL_STATUS_OK;
 }
 

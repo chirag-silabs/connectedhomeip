@@ -19,6 +19,8 @@
 #include <app/icd/server/ICDServerConfig.h>
 #include <event_groups.h>
 #include <wfx_host_events.h>
+#include <cmsis_os2.h>
+#include <sl_cmsis_os2_common.h>
 
 #ifndef RSI_BLE_ENABLE
 #define RSI_BLE_ENABLE (1)
@@ -73,12 +75,16 @@ typedef struct WfxEvent_s
 typedef struct wfx_rsi_s
 {
     // TODO: Change tp WfxEventType_e once the event queue is implemented
-    EventGroupHandle_t events;
-    TaskHandle_t drv_task;
-    TaskHandle_t wlan_task;
-    TaskHandle_t init_task;
+    // EventGroupHandle_t events;
+    // TaskHandle_t drv_task;
+    osThreadId_t drv_thread;
+    // TaskHandle_t wlan_task;
+    osThreadId_t wlan_thread;
+    // TaskHandle_t init_task;
+    // osThreadId_t init_thread;
 #ifdef RSI_BLE_ENABLE
-    TaskHandle_t ble_task;
+    // TaskHandle_t ble_task;
+    osThreadId_t ble_thread;
 #endif
     uint16_t dev_state;
     uint16_t ap_chan; /* The chan our STA is using	*/

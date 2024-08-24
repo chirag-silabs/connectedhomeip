@@ -464,7 +464,7 @@ static sl_status_t wfx_rsi_init(void)
     }
 #endif // SL_MBEDTLS_USE_TINYCRYPT
 
-    wfx_rsi.events = xEventGroupCreateStatic(&rsiDriverEventGroup);
+    // wfx_rsi.events = xEventGroupCreateStatic(&rsiDriverEventGroup);
     wfx_rsi.dev_state |= WFX_RSI_ST_DEV_READY;
     osSemaphoreRelease(sl_rs_ble_init_sem);
     return status;
