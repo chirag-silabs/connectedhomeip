@@ -922,6 +922,7 @@ void BaseApplication::OnPlatformEvent(const ChipDeviceEvent * event, intptr_t)
         AppTask::GetLCD().SetScreen(screen);
 #endif // DISPLAY_ENABLED
     }
+    break;
     default:
         break;
     }
