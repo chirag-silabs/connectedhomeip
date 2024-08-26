@@ -923,7 +923,7 @@ void BaseApplication::OnPlatformEvent(const ChipDeviceEvent * event, intptr_t)
 #endif // DISPLAY_ENABLED
     }
     default:
-    break;
+        break;
     }
 }
 
