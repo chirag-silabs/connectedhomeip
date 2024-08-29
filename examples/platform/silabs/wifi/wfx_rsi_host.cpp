@@ -28,11 +28,19 @@
 #include "wfx_host_events.h"
 #include "wfx_rsi.h"
 
-/* wfxRsi Task will use as its stack */
-StackType_t wfxRsiTaskStack[WFX_RSI_TASK_SZ] = { 0 };
+#include <platform/CHIPDeviceLayer.h>
 
-/* Structure that will hold the TCB of the wfxRsi Task being created. */
-StaticTask_t wfxRsiTaskBuffer;
+// Thread for the WLAN RSI
+constexpr uint32_t kWlanTaskSize = 2048;
+static uint8_t wlanStack[kWlanTaskSize];
+static osThread_t sWlanTaskControlBlock;
+constexpr osThreadAttr_t kWlanTaskAttr = { .name       = "wlan_rsi",
+                                           .attr_bits  = osThreadDetached,
+                                           .cb_mem     = &sWlanTaskControlBlock,
+                                           .cb_size    = osThreadCbSize,
+                                           .stack_mem  = wlanStack,
+                                           .stack_size = kWlanTaskSize,
+                                           .priority   = osPriorityAboveNormal7 };
 
 /*********************************************************************
  * @fn  sl_status_t wfx_wifi_start(void)
@@ -45,24 +53,22 @@ StaticTask_t wfxRsiTaskBuffer;
  ***********************************************************************/
 sl_status_t wfx_wifi_start(void)
 {
-    if (wfx_rsi.dev_state & WFX_RSI_ST_STARTED)
-    {
-        SILABS_LOG("%s: already started.", __func__);
+    if (wfx_rsi.dev_state & WFX_RSI_ST_STARTED) {
         return SL_STATUS_OK;
     }
+    // VerifyOrReturnValue(wfx_rsi.dev_state & WFX_RSI_ST_STARTED, SL_STATUS_OK);
+
     wfx_rsi.dev_state |= WFX_RSI_ST_STARTED;
     SILABS_LOG("%s: starting..", __func__);
+
     /*
      * Create the Wifi driver task
      */
-    wfx_rsi.wlan_task = xTaskCreateStatic(wfx_rsi_task, "wfx_rsi", WFX_RSI_TASK_SZ, NULL, WLAN_DRIVER_TASK_PRIORITY,
-                                          wfxRsiTaskStack, &wfxRsiTaskBuffer);
+    // Creating a Wi-Fi driver thread
+    wfx_rsi.wlan_thread = osThreadNew(wfx_rsi_task, NULL, &kWlanTaskAttr);
 
-    if (NULL == wfx_rsi.wlan_task)
-    {
-        SILABS_LOG("%s: error: failed to create task.", __func__);
-        return SL_STATUS_FAIL;
-    }
+    VerifyOrReturnError(wfx_rsi.wlan_thread != NULL, SL_STATUS_FAIL);
+
     return SL_STATUS_OK;
 }
 
@@ -191,6 +197,7 @@ sl_status_t wfx_connect_to_ap(void)
 }
 
 #if SL_ICD_ENABLED
+#if SLI_SI917
 /*********************************************************************
  * @fn  sl_status_t wfx_power_save()
  * @brief
@@ -202,12 +209,22 @@ sl_status_t wfx_connect_to_ap(void)
  ***********************************************************************/
 sl_status_t wfx_power_save(rsi_power_save_profile_mode_t sl_si91x_ble_state, sl_si91x_performance_profile_t sl_si91x_wifi_state)
 {
-    if (wfx_rsi_power_save(sl_si91x_ble_state, sl_si91x_wifi_state) != SL_STATUS_OK)
-    {
-        return SL_STATUS_FAIL;
-    }
-    return SL_STATUS_OK;
+    return (wfx_rsi_power_save(sl_si91x_ble_state, sl_si91x_wifi_state) ? SL_STATUS_FAIL : SL_STATUS_OK);
 }
+#else  // For RS9116
+/*********************************************************************
+ * @fn  sl_status_t wfx_power_save()
+ * @brief
+ *      Implements the power save in sleepy application
+ * @param[in]  None
+ * @return  SL_STATUS_OK if successful,
+ *          SL_STATUS_FAIL otherwise
+ ***********************************************************************/
+sl_status_t wfx_power_save()
+{
+    return (wfx_rsi_power_save() ? SL_STATUS_FAIL : SL_STATUS_OK);
+}
+#endif /* SLI_SI917 */
 #endif /* SL_ICD_ENABLED */
 
 /*********************************************************************
