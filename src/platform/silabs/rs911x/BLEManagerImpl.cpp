@@ -144,7 +144,7 @@ void sl_ble_event_handling_task(void * args)
         {
         case RSI_BLE_CONN_EVENT: {
             rsi_ble_app_clear_event(RSI_BLE_CONN_EVENT);
-            BLEMgrImpl().HandleConnectEvent();
+            BLEMgrImpl().HandleConnectEvent(&event_msg);
             // Requests the connection parameters change with the remote device
             rsi_ble_conn_params_update(event_msg.resp_enh_conn.dev_addr, BLE_MIN_CONNECTION_INTERVAL_MS,
                                        BLE_MAX_CONNECTION_INTERVAL_MS, BLE_SLAVE_LATENCY_MS, BLE_TIMEOUT_MS);
@@ -153,14 +153,14 @@ void sl_ble_event_handling_task(void * args)
         break;
         case RSI_BLE_DISCONN_EVENT: {
             // event invokes when disconnection was completed
-            BLEMgrImpl().HandleConnectionCloseEvent(event_msg.reason);
+            BLEMgrImpl().HandleConnectionCloseEvent(&event_msg);
             // clear the served event
             rsi_ble_app_clear_event(RSI_BLE_DISCONN_EVENT);
         }
         break;
         case RSI_BLE_MTU_EVENT: {
             // event invokes when write/notification events received
-            BLEMgrImpl().UpdateMtu(event_msg.rsi_ble_mtu);
+            BLEMgrImpl().UpdateMtu(&event_msg);
             // clear the served event
             rsi_ble_app_clear_event(RSI_BLE_MTU_EVENT);
         }
@@ -178,7 +178,7 @@ void sl_ble_event_handling_task(void * args)
         break;
         case RSI_BLE_GATT_WRITE_EVENT: {
             // event invokes when write/notification events received
-            BLEMgrImpl().HandleWriteEvent(event_msg.rsi_ble_write);
+            BLEMgrImpl().HandleWriteEvent(&event_msg);
             // clear the served event
             rsi_ble_app_clear_event(RSI_BLE_GATT_WRITE_EVENT);
         }
@@ -761,7 +761,7 @@ CHIP_ERROR BLEManagerImpl::StopAdvertising(void)
     return err;
 }
 
-void BLEManagerImpl::UpdateMtu(rsi_ble_event_mtu_t evt)
+void BLEManagerImpl::UpdateMtu(sl_wfx_msg_t * evt)
 {
     CHIPoBLEConState * bleConnState = GetConnectionState(event_msg.connectionHandle);
     if (bleConnState != NULL)
@@ -775,10 +775,10 @@ void BLEManagerImpl::UpdateMtu(rsi_ble_event_mtu_t evt)
         // TODO: https://github.com/project-chip/connectedhomeip/issues/2569
         // tracks making this safe with a check or explaining why no check
         // is needed.
-        ChipLogProgress(DeviceLayer, "DriveBLEState UpdateMtu %d", evt.mtu_size);
+        ChipLogProgress(DeviceLayer, "DriveBLEState UpdateMtu %d", evt->rsi_ble_mtu.mtu_size);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wconversion"
-        bleConnState->mtu = evt.mtu_size;
+        bleConnState->mtu = evt->rsi_ble_mtu.mtu_size;
 #pragma GCC diagnostic pop
         ;
     }
@@ -790,14 +790,14 @@ void BLEManagerImpl::HandleBootEvent(void)
     PlatformMgr().ScheduleWork(DriveBLEState, 0);
 }
 
-void BLEManagerImpl::HandleConnectEvent(void)
+void BLEManagerImpl::HandleConnectEvent(sl_wfx_msg_t * evt)
 {
     AddConnection(event_msg.connectionHandle, event_msg.bondingHandle);
     PlatformMgr().ScheduleWork(DriveBLEState, 0);
 }
 
 // TODO:: Implementation need to be done.
-void BLEManagerImpl::HandleConnectionCloseEvent(uint16_t reason)
+void BLEManagerImpl::HandleConnectionCloseEvent(sl_wfx_msg_t * evt)
 {
     uint8_t connHandle = 1;
 
@@ -807,7 +807,7 @@ void BLEManagerImpl::HandleConnectionCloseEvent(uint16_t reason)
         event.Type                          = DeviceEventType::kCHIPoBLEConnectionError;
         event.CHIPoBLEConnectionError.ConId = connHandle;
 
-        switch (reason)
+        switch (evt->reason)
         {
 
         case RSI_BT_CTRL_REMOTE_USER_TERMINATED:
@@ -819,7 +819,7 @@ void BLEManagerImpl::HandleConnectionCloseEvent(uint16_t reason)
             event.CHIPoBLEConnectionError.Reason = BLE_ERROR_CHIPOBLE_PROTOCOL_ABORT;
         }
 
-        ChipLogProgress(DeviceLayer, "BLE GATT connection closed (con %u, reason %x)", connHandle, reason);
+        ChipLogProgress(DeviceLayer, "BLE GATT connection closed (con %u, reason %x)", connHandle, evt->reason);
 
         PlatformMgr().PostEventOrDie(&event);
 
@@ -831,22 +831,22 @@ void BLEManagerImpl::HandleConnectionCloseEvent(uint16_t reason)
     }
 }
 
-void BLEManagerImpl::HandleWriteEvent(rsi_ble_event_write_t evt)
+void BLEManagerImpl::HandleWriteEvent(sl_wfx_msg_t * evt)
 {
-    ChipLogProgress(DeviceLayer, "Char Write Req, packet type %d", evt.pkt_type);
+    ChipLogProgress(DeviceLayer, "Char Write Req, packet type %d", evt->rsi_ble_write.pkt_type);
 
-    if (evt.handle[0] == (uint8_t) event_msg.rsi_ble_gatt_server_client_config_hndl) // TODO:: compare the handle exactly
+    if (evt->rsi_ble_write.handle[0] == (uint8_t) event_msg.rsi_ble_gatt_server_client_config_hndl) // TODO:: compare the handle exactly
     {
-        HandleTXCharCCCDWrite(&evt);
+        HandleTXCharCCCDWrite(evt);
     }
     else
     {
-        HandleRXCharWrite(&evt);
+        HandleRXCharWrite(evt);
     }
 }
 
 // TODO:: Need to implement this
-void BLEManagerImpl::HandleTXCharCCCDWrite(rsi_ble_event_write_t * evt)
+void BLEManagerImpl::HandleTXCharCCCDWrite(sl_wfx_msg_t * evt)
 {
     CHIP_ERROR err           = CHIP_NO_ERROR;
     bool isIndicationEnabled = false;
@@ -857,11 +857,11 @@ void BLEManagerImpl::HandleTXCharCCCDWrite(rsi_ble_event_write_t * evt)
     VerifyOrExit(bleConnState != NULL, err = CHIP_ERROR_NO_MEMORY);
 
     // Determine if the client is enabling or disabling notification/indication.
-    if (evt->att_value[0] != 0)
+    if (evt->rsi_ble_write.att_value[0] != 0)
     {
         isIndicationEnabled = true;
     }
-    ChipLogProgress(DeviceLayer, "HandleTXcharCCCDWrite - Config Flags value : %d", evt->att_value[0]);
+    ChipLogProgress(DeviceLayer, "HandleTXcharCCCDWrite - Config Flags value : %d", evt->rsi_ble_write.att_value[0]);
     ChipLogProgress(DeviceLayer, "CHIPoBLE %s received", isIndicationEnabled ? "subscribe" : "unsubscribe");
 
     if (isIndicationEnabled)
@@ -891,13 +891,13 @@ exit:
     }
 }
 
-void BLEManagerImpl::HandleRXCharWrite(rsi_ble_event_write_t * evt)
+void BLEManagerImpl::HandleRXCharWrite(sl_wfx_msg_t * evt)
 {
     uint8_t conId  = 1;
     CHIP_ERROR err = CHIP_NO_ERROR;
     System::PacketBufferHandle buf;
-    uint16_t writeLen = evt->length;
-    uint8_t * data    = (uint8_t *) evt->att_value;
+    uint16_t writeLen = evt->rsi_ble_write.length;
+    uint8_t * data    = (uint8_t *) evt->rsi_ble_write.att_value;
 
     // Copy the data to a packet buffer.
     buf = System::PacketBufferHandle::NewWithData(data, writeLen, 0, 0);

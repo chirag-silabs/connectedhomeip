@@ -33,6 +33,7 @@ extern "C" {
 #include <rsi_ble.h>
 #include <rsi_ble_apis.h>
 #include <rsi_bt_common.h>
+#include "wfx_sl_ble_init.h"
 #ifdef __cplusplus
 }
 #endif // __cplusplus
@@ -58,12 +59,12 @@ public:
     void HandleBootEvent(void);
 
 #if (SLI_SI91X_ENABLE_BLE || RSI_BLE_ENABLE)
-    void HandleConnectEvent(void);
-    void HandleConnectionCloseEvent(uint16_t reason);
-    void HandleWriteEvent(rsi_ble_event_write_t evt);
-    void UpdateMtu(rsi_ble_event_mtu_t evt);
+    void HandleConnectEvent(sl_wfx_msg_t * evt);
+    void HandleConnectionCloseEvent(sl_wfx_msg_t * evt);
+    void HandleWriteEvent(sl_wfx_msg_t * evt);
+    void UpdateMtu(sl_wfx_msg_t * evt);
     void HandleTxConfirmationEvent(BLE_CONNECTION_OBJECT conId);
-    void HandleTXCharCCCDWrite(rsi_ble_event_write_t * evt);
+    void HandleTXCharCCCDWrite(sl_wfx_msg_t * evt);
     void HandleSoftTimerEvent(void);
     int32_t SendBLEAdvertisementCommand(void);
 #else
@@ -186,7 +187,7 @@ private:
 #endif
 
 #if (SLI_SI91X_ENABLE_BLE || RSI_BLE_ENABLE)
-    void HandleRXCharWrite(rsi_ble_event_write_t * evt);
+    void HandleRXCharWrite(sl_wfx_msg_t * evt);
 #else
     void HandleRXCharWrite(volatile sl_bt_msg_t * evt);
 #endif
