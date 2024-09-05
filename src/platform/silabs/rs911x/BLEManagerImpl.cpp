@@ -169,7 +169,7 @@ void sl_ble_event_handling_task(void * args)
 #if CHIP_ENABLE_ADDITIONAL_DATA_ADVERTISING
             if (event_msg.rsi_ble_read_req->type == 0)
             {
-                BLEMgrImpl().HandleC3ReadRequest(event_msg.rsi_ble_read_req);
+                BLEMgrImpl().HandleC3ReadRequest(&event_msg);
             }
 #endif // CHIP_ENABLE_ADDITIONAL_DATA_ADVERTISING
        // clear the served event
@@ -465,6 +465,7 @@ CHIP_ERROR BLEManagerImpl::SendIndication(BLE_CONNECTION_OBJECT conId, const Chi
                                           PacketBufferHandle data)
 {
     int32_t status = 0;
+    // TODO: find a way to skip the event_msg here
     status = rsi_ble_indicate_value(event_msg.resp_enh_conn.dev_addr, event_msg.rsi_ble_measurement_hndl, (data->DataLength()),
                                     data->Start());
 
@@ -763,7 +764,7 @@ CHIP_ERROR BLEManagerImpl::StopAdvertising(void)
 
 void BLEManagerImpl::UpdateMtu(sl_wfx_msg_t * evt)
 {
-    CHIPoBLEConState * bleConnState = GetConnectionState(event_msg.connectionHandle);
+    CHIPoBLEConState * bleConnState = GetConnectionState(evt->connectionHandle);
     if (bleConnState != NULL)
     {
         // bleConnState->MTU is a 10-bit field inside a uint16_t.  We're
@@ -792,7 +793,7 @@ void BLEManagerImpl::HandleBootEvent(void)
 
 void BLEManagerImpl::HandleConnectEvent(sl_wfx_msg_t * evt)
 {
-    AddConnection(event_msg.connectionHandle, event_msg.bondingHandle);
+    AddConnection(evt->connectionHandle, evt->bondingHandle);
     PlatformMgr().ScheduleWork(DriveBLEState, 0);
 }
 
@@ -835,7 +836,7 @@ void BLEManagerImpl::HandleWriteEvent(sl_wfx_msg_t * evt)
 {
     ChipLogProgress(DeviceLayer, "Char Write Req, packet type %d", evt->rsi_ble_write.pkt_type);
 
-    if (evt->rsi_ble_write.handle[0] == (uint8_t) event_msg.rsi_ble_gatt_server_client_config_hndl) // TODO:: compare the handle exactly
+    if (evt->rsi_ble_write.handle[0] == (uint8_t) evt->rsi_ble_gatt_server_client_config_hndl) // TODO:: compare the handle exactly
     {
         HandleTXCharCCCDWrite(evt);
     }
@@ -853,7 +854,7 @@ void BLEManagerImpl::HandleTXCharCCCDWrite(sl_wfx_msg_t * evt)
     ChipDeviceEvent event;
     CHIPoBLEConState * bleConnState;
 
-    bleConnState = GetConnectionState(event_msg.connectionHandle);
+    bleConnState = GetConnectionState(evt->connectionHandle);
     VerifyOrExit(bleConnState != NULL, err = CHIP_ERROR_NO_MEMORY);
 
     // Determine if the client is enabling or disabling notification/indication.
@@ -1024,9 +1025,9 @@ exit:
     return err;
 }
 
-void BLEManagerImpl::HandleC3ReadRequest(rsi_ble_read_req_t * rsi_ble_read_req)
+void BLEManagerImpl::HandleC3ReadRequest(sl_wfx_msg_t * evt)
 {
-    sl_status_t ret = rsi_ble_gatt_read_response(rsi_ble_read_req->dev_addr, GATT_READ_RESP, rsi_ble_read_req->handle,
+    sl_status_t ret = rsi_ble_gatt_read_response(evt->rsi_ble_read_req.dev_addr, GATT_READ_RESP, evt->rsi_ble_read_req.handle,
                                                  GATT_READ_ZERO_OFFSET, sInstance.c3AdditionalDataBufferHandle->DataLength(),
                                                  sInstance.c3AdditionalDataBufferHandle->Start());
     if (ret != SL_STATUS_OK)
