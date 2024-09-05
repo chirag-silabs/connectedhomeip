@@ -26,6 +26,7 @@
 #include <platform/internal/CHIPDeviceLayerInternal.h>
 #if CHIP_DEVICE_CONFIG_ENABLE_CHIPOBLE
 
+#include "silabs_utils.h"
 #include "cmsis_os2.h"
 #include <platform/internal/BLEManager.h>
 #ifndef SLI_SI91X_MCU_INTERFACE
@@ -94,16 +95,6 @@ constexpr osThreadAttr_t kBleTaskAttr = { .name       = "rsi_ble",
 osMessageQueueId_t sBleEventQueue = NULL;
 // TODO: Confirm that this value works for size and timing
 #define WFX_QUEUE_SIZE 10
-constexpr uint32_t kBleTaskSize = 2048;
-static uint8_t bleStack[kBleTaskSize];
-static osThread_t sBleTaskControlBlock;
-constexpr osThreadAttr_t kBleTaskAttr = { .name       = "rsi_ble",
-                                           .attr_bits  = osThreadDetached,
-                                           .cb_mem     = &sBleTaskControlBlock,
-                                           .cb_size    = osThreadCbSize,
-                                           .stack_mem  = bleStack,
-                                           .stack_size = kBleTaskSize,
-                                           .priority   = osPriorityRealtime };
 
 using namespace ::chip;
 using namespace ::chip::Ble;
@@ -144,9 +135,6 @@ void sl_ble_init()
 
     rsi_ble_set_random_address_with_value(randomAddrBLE);
 
-    // Create the message queue
-    sBleEventQueue = osMessageQueueNew(WFX_QUEUE_SIZE, sizeof(WfxEvent_t), NULL);
-    VerifyOrDie(sBleEventQueue != nullptr);
     chip::DeviceLayer::Internal::BLEMgrImpl().HandleBootEvent();
 }
 
@@ -277,10 +265,12 @@ CHIP_ERROR BLEManagerImpl::_Init()
 
     VerifyOrReturnError(sBleThread != nullptr, CHIP_ERROR_INCORRECT_STATE);
 
-    VerifyOrDie(wfx_rsi.ble_thread != nullptr);
     // Initialize the CHIP BleLayer.
     err = BleLayer::Init(this, this, &DeviceLayer::SystemLayer());
     SuccessOrExit(err);
+
+    sBleEventQueue = osMessageQueueNew(WFX_QUEUE_SIZE, sizeof(WfxEvent_t), NULL);
+    VerifyOrDie(sBleEventQueue != nullptr);
 
     memset(mBleConnections, 0, sizeof(mBleConnections));
     memset(mIndConfId, kUnusedIndex, sizeof(mIndConfId));
