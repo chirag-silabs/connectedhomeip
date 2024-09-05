@@ -52,6 +52,17 @@
 #include <stdbool.h>
 #include <string.h>
 
+typedef enum
+{
+    RSI_BLE_CONN_EVENT_1,
+    RSI_BLE_DISCONN_EVENT_1,
+    RSI_BLE_GATT_WRITE_EVENT_1,
+    RSI_BLE_MTU_EVENT_1,
+    RSI_BLE_GATT_INDICATION_CONFIRMATION_1,
+    RSI_BLE_RESP_ATT_VALUE_1,
+    RSI_BLE_EVENT_GATT_RD_1
+} BleEventType_e;
+
 typedef struct sl_wfx_msg_s
 {
     uint8_t connectionHandle;
@@ -71,8 +82,13 @@ typedef struct sl_wfx_msg_s
     uint16_t rsi_ble_measurement_hndl;
     uint16_t rsi_ble_gatt_server_client_config_hndl;
     uint16_t subscribed;
-
 } sl_wfx_msg_t;
+
+typedef struct BleEvent_s
+{
+    BleEventType_e eventType;
+    sl_wfx_msg_t eventData;
+} BleEvent_t;
 
 #define ATT_REC_IN_HOST (0)
 

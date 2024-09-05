@@ -23,16 +23,22 @@
 #include "wfx_sl_ble_init.h"
 #include "ble_config.h"
 #include "cmsis_os2.h"
+#include <sl_cmsis_os2_common.h>
 #include "silabs_utils.h"
 // Global Variables
 rsi_ble_t att_list;
 sl_wfx_msg_t event_msg;
 
 extern osSemaphoreId_t sl_ble_event_sem;
-
+extern osMessageQueueId_t sBleEventQueue;
 // Memory to initialize driver
 uint8_t bt_global_buf[BT_GLOBAL_BUFF_LEN];
 const uint8_t ShortUUID_CHIPoBLEService[] = { 0xF6, 0xFF };
+
+void BlePostEvent(BleEvent_t * event)
+{
+    sl_status_t status = osMessageQueuePut(sBleEventQueue, event, 0, 0);
+}
 
 /*==============================================*/
 /**
@@ -43,13 +49,13 @@ const uint8_t ShortUUID_CHIPoBLEService[] = { 0xF6, 0xFF };
  * @section description
  * This function is used during BLE initialization.
  */
-void rsi_ble_app_init_events()
-{
-    event_msg.ble_app_event_map  = 0;
-    event_msg.ble_app_event_mask = 0xFFFFFFFF;
-    event_msg.ble_app_event_mask = event_msg.ble_app_event_mask; // To suppress warning while compiling
-    return;
-}
+// void rsi_ble_app_init_events()
+// {
+//     event_msg.ble_app_event_map  = 0;
+//     event_msg.ble_app_event_mask = 0xFFFFFFFF;
+//     event_msg.ble_app_event_mask = event_msg.ble_app_event_mask; // To suppress warning while compiling
+//     return;
+// }
 
 /*==============================================*/
 /**
@@ -60,12 +66,12 @@ void rsi_ble_app_init_events()
  * @section description
  * This function is used to clear the specific event.
  */
-void rsi_ble_app_clear_event(uint32_t event_num)
-{
-    event_msg.event_num = event_num;
-    event_msg.ble_app_event_map &= ~BIT(event_num);
-    return;
-}
+// void rsi_ble_app_clear_event(uint32_t event_num)
+// {
+//     event_msg.event_num = event_num;
+//     event_msg.ble_app_event_map &= ~BIT(event_num);
+//     return;
+// }
 
 /*==============================================*/
 /**
@@ -78,8 +84,11 @@ void rsi_ble_app_clear_event(uint32_t event_num)
  */
 void rsi_ble_on_mtu_event(rsi_ble_event_mtu_t * rsi_ble_mtu)
 {
+    BleEvent_t bleEvent;
+    bleEvent.eventType = RSI_BLE_MTU_EVENT_1;
     memcpy(&event_msg.rsi_ble_mtu, rsi_ble_mtu, sizeof(rsi_ble_event_mtu_t));
-    rsi_ble_app_set_event(RSI_BLE_MTU_EVENT);
+    BlePostEvent(&bleEvent);
+    // rsi_ble_app_set_event(RSI_BLE_MTU_EVENT);
 }
 
 /*==============================================*/
@@ -93,10 +102,13 @@ void rsi_ble_on_mtu_event(rsi_ble_event_mtu_t * rsi_ble_mtu)
  * This callback function is invoked when write/notify/indication events are received
  */
 void rsi_ble_on_gatt_write_event(uint16_t event_id, rsi_ble_event_write_t * rsi_ble_write)
-{
+{    
+    BleEvent_t bleEvent;
+    bleEvent.eventType = RSI_BLE_GATT_WRITE_EVENT_1;
     event_msg.event_id = event_id;
     memcpy(&event_msg.rsi_ble_write, rsi_ble_write, sizeof(rsi_ble_event_write_t));
-    rsi_ble_app_set_event(RSI_BLE_GATT_WRITE_EVENT);
+    BlePostEvent(&bleEvent);
+    // rsi_ble_app_set_event(RSI_BLE_GATT_WRITE_EVENT);
 }
 
 /*==============================================*/
@@ -110,10 +122,13 @@ void rsi_ble_on_gatt_write_event(uint16_t event_id, rsi_ble_event_write_t * rsi_
  */
 void rsi_ble_on_enhance_conn_status_event(rsi_ble_event_enhance_conn_status_t * resp_enh_conn)
 {
+    BleEvent_t bleEvent;
+    bleEvent.eventType = RSI_BLE_CONN_EVENT_1;
     event_msg.connectionHandle = 1;
     event_msg.bondingHandle    = 255;
     memcpy(event_msg.resp_enh_conn.dev_addr, resp_enh_conn->dev_addr, RSI_DEV_ADDR_LEN);
-    rsi_ble_app_set_event(RSI_BLE_CONN_EVENT);
+    BlePostEvent(&bleEvent);
+    // rsi_ble_app_set_event(RSI_BLE_CONN_EVENT);
 }
 
 /*==============================================*/
@@ -128,8 +143,11 @@ void rsi_ble_on_enhance_conn_status_event(rsi_ble_event_enhance_conn_status_t * 
  */
 void rsi_ble_on_disconnect_event(rsi_ble_event_disconnect_t * resp_disconnect, uint16_t reason)
 {
+    BleEvent_t bleEvent;
+    bleEvent.eventType = RSI_BLE_DISCONN_EVENT_1;
     event_msg.reason = reason;
-    rsi_ble_app_set_event(RSI_BLE_DISCONN_EVENT);
+    BlePostEvent(&bleEvent);
+    // rsi_ble_app_set_event(RSI_BLE_DISCONN_EVENT);
 }
 
 /*==============================================*/
@@ -143,9 +161,12 @@ void rsi_ble_on_disconnect_event(rsi_ble_event_disconnect_t * resp_disconnect, u
  */
 void rsi_ble_on_event_indication_confirmation(uint16_t resp_status, rsi_ble_set_att_resp_t * rsi_ble_event_set_att_rsp)
 {
+    BleEvent_t bleEvent;
+    bleEvent.eventType = RSI_BLE_GATT_INDICATION_CONFIRMATION_1;
     event_msg.resp_status = resp_status;
     memcpy(&event_msg.rsi_ble_event_set_att_rsp, rsi_ble_event_set_att_rsp, sizeof(rsi_ble_set_att_resp_t));
-    rsi_ble_app_set_event(RSI_BLE_GATT_INDICATION_CONFIRMATION);
+    BlePostEvent(&bleEvent);
+    // rsi_ble_app_set_event(RSI_BLE_GATT_INDICATION_CONFIRMATION);
 }
 
 /*==============================================*/
@@ -160,9 +181,12 @@ void rsi_ble_on_event_indication_confirmation(uint16_t resp_status, rsi_ble_set_
  */
 void rsi_ble_on_read_req_event(uint16_t event_id, rsi_ble_read_req_t * rsi_ble_read_req)
 {
+    BleEvent_t bleEvent;
+    bleEvent.eventType = RSI_BLE_EVENT_GATT_RD_1;
     event_msg.event_id = event_id;
     memcpy(&event_msg.rsi_ble_read_req, rsi_ble_read_req, sizeof(rsi_ble_read_req_t));
-    rsi_ble_app_set_event(RSI_BLE_EVENT_GATT_RD);
+    BlePostEvent(&bleEvent);
+    // rsi_ble_app_set_event(RSI_BLE_EVENT_GATT_RD);
 }
 
 /*==============================================*/
@@ -176,20 +200,20 @@ void rsi_ble_on_read_req_event(uint16_t event_id, rsi_ble_read_req_t * rsi_ble_r
  * @section description
  * This function returns the highest priority event among all the set events
  */
-int32_t rsi_ble_app_get_event(void)
-{
-    uint32_t ix;
+// int32_t rsi_ble_app_get_event(void)
+// {
+//     uint32_t ix;
 
-    for (ix = 0; ix < 32; ix++)
-    {
-        if (event_msg.ble_app_event_map & (1 << ix))
-        {
-            return ix;
-        }
-    }
+//     for (ix = 0; ix < 32; ix++)
+//     {
+//         if (event_msg.ble_app_event_map & (1 << ix))
+//         {
+//             return ix;
+//         }
+//     }
 
-    return (-1);
-}
+//     return (-1);
+// }
 
 /*==============================================*/
 /**
@@ -200,12 +224,12 @@ int32_t rsi_ble_app_get_event(void)
  * @section description
  * This function is used to set/raise the specific event.
  */
-void rsi_ble_app_set_event(uint32_t event_num)
-{
-    event_msg.ble_app_event_map |= BIT(event_num);
-    osSemaphoreRelease(sl_ble_event_sem);
-    return;
-}
+// void rsi_ble_app_set_event(uint32_t event_num)
+// {
+//     event_msg.ble_app_event_map |= BIT(event_num);
+//     osSemaphoreRelease(sl_ble_event_sem);
+//     return;
+// }
 
 /*==============================================*/
 /**

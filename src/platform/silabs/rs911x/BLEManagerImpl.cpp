@@ -62,6 +62,8 @@ extern "C" {
 #include <setup_payload/AdditionalDataPayloadGenerator.h>
 #endif
 
+#define WFX_QUEUE_SIZE 10
+
 #define BLE_MIN_CONNECTION_INTERVAL_MS 24
 #define BLE_MAX_CONNECTION_INTERVAL_MS 40
 #define BLE_SLAVE_LATENCY_MS 0
@@ -73,6 +75,7 @@ extern sl_wfx_msg_t event_msg;
 
 osSemaphoreId_t sl_ble_event_sem;
 osSemaphoreId_t sl_rs_ble_init_sem;
+osMessageQueueId_t sBleEventQueue = NULL;
 
 osTimerId_t sbleAdvTimeoutTimer;
 
@@ -113,18 +116,65 @@ void sl_ble_init()
     //  Exchange of GATT info with BLE stack
 
     rsi_ble_add_matter_service();
-    //  initializing the application events map
-    rsi_ble_app_init_events();
     rsi_ble_set_random_address_with_value(randomAddrBLE);
+
+    sBleEventQueue = osMessageQueueNew(WFX_QUEUE_SIZE, sizeof(WfxEvent_t), NULL);
+    VerifyOrDie(sBleEventQueue != nullptr);
+
     chip::DeviceLayer::Internal::BLEMgrImpl().HandleBootEvent();
 }
+
+void ProcessEvent(BleEvent_t inEvent)
+{
+    switch (inEvent.eventType)
+    {
+    case RSI_BLE_CONN_EVENT_1: {
+        BLEMgrImpl().HandleConnectEvent(&event_msg);
+        // Requests the connection parameters change with the remote device
+        rsi_ble_conn_params_update(event_msg.resp_enh_conn.dev_addr, BLE_MIN_CONNECTION_INTERVAL_MS,
+                                   BLE_MAX_CONNECTION_INTERVAL_MS, BLE_SLAVE_LATENCY_MS, BLE_TIMEOUT_MS);
+        rsi_ble_set_data_len(event_msg.resp_enh_conn.dev_addr, RSI_BLE_TX_OCTETS, RSI_BLE_TX_TIME);
+    }
+    break;
+    case RSI_BLE_DISCONN_EVENT_1: {
+        // event invokes when disconnection was completed
+        BLEMgrImpl().HandleConnectionCloseEvent(&event_msg);
+    }
+    break;
+    case RSI_BLE_MTU_EVENT_1: {
+        // event invokes when write/notification events received
+        BLEMgrImpl().UpdateMtu(&event_msg);
+    }
+    break;
+    case RSI_BLE_EVENT_GATT_RD_1: {
+#if CHIP_ENABLE_ADDITIONAL_DATA_ADVERTISING
+        if (event_msg.rsi_ble_read_req->type == 0)
+        {
+            BLEMgrImpl().HandleC3ReadRequest(&event_msg);
+        }
+#endif // CHIP_ENABLE_ADDITIONAL_DATA_ADVERTISING
+    }
+    break;
+    case RSI_BLE_GATT_WRITE_EVENT_1: {
+        // event invokes when write/notification events received
+        BLEMgrImpl().HandleWriteEvent(&event_msg);
+    }
+    break;
+    case RSI_BLE_GATT_INDICATION_CONFIRMATION_1: {
+        BLEMgrImpl().HandleTxConfirmationEvent(1);
+    }
+    break;
+    default:
+    break;
+    }
+}
+
 
 void sl_ble_event_handling_task(void * args)
 {
     int32_t event_id;
-
-    //! This semaphore is waiting for wifi module initialization.
-    osSemaphoreAcquire(sl_rs_ble_init_sem, osWaitForever);
+    sl_status_t status;
+    BleEvent_t bleEvent;
 
     // This function initialize BLE and start BLE advertisement.
     sl_ble_init();
@@ -132,71 +182,14 @@ void sl_ble_event_handling_task(void * args)
     // Application event map
     while (1)
     {
-        // checking for events list
-        event_id = rsi_ble_app_get_event();
-        if (event_id == -1)
+        status = osMessageQueueGet(sBleEventQueue, &bleEvent, NULL, osWaitForever);
+        if (status == osOK)
         {
-            //! This semaphore is waiting for next ble event task
-            osSemaphoreAcquire(sl_ble_event_sem, osWaitForever);
-            continue;
+            ProcessEvent(bleEvent);
         }
-        switch (event_id)
+        else
         {
-        case RSI_BLE_CONN_EVENT: {
-            rsi_ble_app_clear_event(RSI_BLE_CONN_EVENT);
-            BLEMgrImpl().HandleConnectEvent(&event_msg);
-            // Requests the connection parameters change with the remote device
-            rsi_ble_conn_params_update(event_msg.resp_enh_conn.dev_addr, BLE_MIN_CONNECTION_INTERVAL_MS,
-                                       BLE_MAX_CONNECTION_INTERVAL_MS, BLE_SLAVE_LATENCY_MS, BLE_TIMEOUT_MS);
-            rsi_ble_set_data_len(event_msg.resp_enh_conn.dev_addr, RSI_BLE_TX_OCTETS, RSI_BLE_TX_TIME);
-        }
-        break;
-        case RSI_BLE_DISCONN_EVENT: {
-            // event invokes when disconnection was completed
-            BLEMgrImpl().HandleConnectionCloseEvent(&event_msg);
-            // clear the served event
-            rsi_ble_app_clear_event(RSI_BLE_DISCONN_EVENT);
-        }
-        break;
-        case RSI_BLE_MTU_EVENT: {
-            // event invokes when write/notification events received
-            BLEMgrImpl().UpdateMtu(&event_msg);
-            // clear the served event
-            rsi_ble_app_clear_event(RSI_BLE_MTU_EVENT);
-        }
-        break;
-        case RSI_BLE_EVENT_GATT_RD: {
-#if CHIP_ENABLE_ADDITIONAL_DATA_ADVERTISING
-            if (event_msg.rsi_ble_read_req->type == 0)
-            {
-                BLEMgrImpl().HandleC3ReadRequest(&event_msg);
-            }
-#endif // CHIP_ENABLE_ADDITIONAL_DATA_ADVERTISING
-       // clear the served event
-            rsi_ble_app_clear_event(RSI_BLE_EVENT_GATT_RD);
-        }
-        break;
-        case RSI_BLE_GATT_WRITE_EVENT: {
-            // event invokes when write/notification events received
-            BLEMgrImpl().HandleWriteEvent(&event_msg);
-            // clear the served event
-            rsi_ble_app_clear_event(RSI_BLE_GATT_WRITE_EVENT);
-        }
-        break;
-        case RSI_BLE_GATT_INDICATION_CONFIRMATION: {
-            BLEMgrImpl().HandleTxConfirmationEvent(1);
-            rsi_ble_app_clear_event(RSI_BLE_GATT_INDICATION_CONFIRMATION);
-        }
-        break;
-        default:
-            break;
-        }
-
-        if (chip::DeviceLayer::ConnectivityMgr().IsWiFiStationConnected())
-        {
-            // Once DUT is connected adding a 500ms delay
-            // TODO: Fix this with a better event handling
-            vTaskDelay(pdMS_TO_TICKS(500));
+            ChipLogError(DeviceLayer, "sl_ble_event_handling_task: get event failed: 0x%lx", static_cast<uint32_t>(status));
         }
     }
 }
