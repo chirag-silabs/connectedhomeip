@@ -87,18 +87,36 @@ osTimerId_t sDHCPTimer;
  * This file implements the interface to the RSI SAPIs
  */
 
+/**
+ * @brief Callback function for the DHCP timer event.
+ *
+ * TODO: Once the class structure is done, move this to the protected section. Should not be public.
+ */
 void DHCPTimerEventHandler(void * arg)
 {
     WifiPlatformEvent event = WifiPlatformEvent::kStationDhcpPoll;
     PostWifiPlatformEvent(event);
 }
 
+/**
+ * @brief Function cancels the DHCP timer if it is running.
+ *        If the timer isn't running, function doesn't do anything.
+ *
+ * TODO: Once the class structure is done, move this to the protected section. Should not be public.
+ */
 void CancelDHCPTimer(void)
 {
     VerifyOrReturn(osTimerIsRunning(sDHCPTimer), ChipLogDetail(DeviceLayer, "CancelDHCPTimer: timer not running"));
     VerifyOrReturn(osTimerStop(sDHCPTimer) == osOK, ChipLogError(DeviceLayer, "CancelDHCPTimer: failed to stop timer"));
 }
 
+/**
+ * @brief Function starts the DHCP timer with the given timeout.
+ *
+ * TODO: Once the class structure is done, move this to the protected section. Should not be public.
+ *
+ * @param timeout timer duration in milliseconds
+ */
 void StartDHCPTimer(uint32_t timeout)
 {
     // Cancel timer if already started
@@ -108,6 +126,15 @@ void StartDHCPTimer(uint32_t timeout)
                    ChipLogError(DeviceLayer, "StartDHCPTimer: failed to start timer"));
 }
 
+/**
+ * @brief Function creates the DHCP timer
+ *
+ * @note This function is necessary for the time being since the WifiInterface don't leverage inheritance for the time being and as
+ *       such don't have access to all data structures. Once the class structure is done, this function will not be necessary
+ *       anymore.
+ *
+ * @return sl_status_t SL_STATUS_OK, the timer was successfully created
+ */
 sl_status_t CreateDHCPTimer()
 {
     // TODO: Use LWIP timer instead of creating a new one here
@@ -595,7 +622,7 @@ void ProcessEvent(WifiPlatformEvent event)
     case WifiPlatformEvent::kStationConnect: {
         ChipLogDetail(DeviceLayer, "WifiPlatformEvent::kStationConnect");
         wfx_rsi.dev_state.Set(WifiState::kStationConnected);
-        ResetDHCPNotificationFlags();
+        ResetConnectivityNotificationFlags();
         chip::DeviceLayer::Silabs::Lwip::SetLwipStationLinkUp();
     }
     break;
@@ -606,7 +633,7 @@ void ProcessEvent(WifiPlatformEvent event)
                                                      WifiState::kStationConnected, WifiState::kStationDhcpDone);
         wfx_rsi.dev_state.Clear(flagsToClear);
         /* TODO: Implement disconnect notify */
-        ResetDHCPNotificationFlags();
+        ResetConnectivityNotificationFlags();
         chip::DeviceLayer::Silabs::Lwip::SetLwipStationLinkDown();
 
 #if (CHIP_DEVICE_CONFIG_ENABLE_IPV4)

@@ -52,7 +52,7 @@ sl_status_t TriggerPlatformWifiDisconnection();
  *
  * TODO: This function should be moved to the protected section once the class structure is done.
  */
-void ResetDHCPNotificationFlags();
+void ResetConnectivityNotificationFlags();
 
 /**
  * @brief Notify the application about the connectivity status if it has not been notified yet.

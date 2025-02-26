@@ -135,12 +135,12 @@ void NotifyConnectivity(void)
 }
 
 /**
- * @brief Reset the flags that are used to notify the application about DHCP connectivity
- *        and emits a WifiPlatformEvent::kStationDoDhcp event to trigger DHCP polling checks.
+ * @brief Reset the flags that are used to notify the application about connectivity
+ *        and emits a WifiPlatformEvent::kStationDoDhcp or WifiPlatformEvent::kStationNotify event to trigger notify.
  *
  * TODO: This function should be moved to the protected section once the class structure is done.
  */
-void ResetDHCPNotificationFlags(void)
+void ResetConnectivityNotificationFlags(void)
 {
 
     ResetIPNotificationStates();

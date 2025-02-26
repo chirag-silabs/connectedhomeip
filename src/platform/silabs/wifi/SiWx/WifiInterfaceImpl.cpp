@@ -384,6 +384,8 @@ sl_status_t SetWifiConfigurations()
     VerifyOrReturnError(status == SL_STATUS_OK, status,
                         ChipLogError(DeviceLayer, "sl_wifi_set_listen_interval failed: 0x%lx", status));
 
+    // Setting the TA retry to 1 and giving the control to the M4 for improved power efficiency
+    // When max_retry_attempts is set to 0, TA will retry indefinitely.
     sl_wifi_advanced_client_configuration_t client_config = { .max_retry_attempts = 1 };
     status = sl_wifi_set_advanced_client_configuration(SL_WIFI_CLIENT_INTERFACE, &client_config);
     VerifyOrReturnError(status == SL_STATUS_OK, status,
@@ -640,7 +642,7 @@ void ProcessEvent(WifiPlatformEvent event)
     case WifiPlatformEvent::kStationConnect:
         ChipLogDetail(DeviceLayer, "WifiPlatformEvent::kStationConnect");
         wfx_rsi.dev_state.Set(WifiState::kStationConnected);
-        ResetDHCPNotificationFlags();
+        ResetConnectivityNotificationFlags();
         break;
 
     case WifiPlatformEvent::kStationDisconnect: {
@@ -653,7 +655,7 @@ void ProcessEvent(WifiPlatformEvent event)
             .Clear(WifiState::kStationDhcpDone);
 
         /* TODO: Implement disconnect notify */
-        ResetDHCPNotificationFlags();
+        ResetConnectivityNotificationFlags();
 #if (CHIP_DEVICE_CONFIG_ENABLE_IPV4)
         NotifyIPv4Change(false);
 #endif /* CHIP_DEVICE_CONFIG_ENABLE_IPV4 */
