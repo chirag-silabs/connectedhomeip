@@ -81,8 +81,7 @@ wfx_wifi_scan_ext_t temp_reset;
 
 osTimerId_t sDHCPTimer;
 
-} //namespace
-
+} // namespace
 
 /*
  * This file implements the interface to the RSI SAPIs
@@ -121,12 +120,6 @@ sl_status_t CreateDHCPTimer()
 
     return SL_STATUS_OK;
 }
-
-
-
-
-
-
 
 sl_status_t TriggerPlatformWifiDisconnection()
 {
