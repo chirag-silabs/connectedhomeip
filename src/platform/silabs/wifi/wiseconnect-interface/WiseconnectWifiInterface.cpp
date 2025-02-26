@@ -37,7 +37,6 @@ constexpr osThreadAttr_t kWlanTaskAttr = { .name       = "wlan_rsi",
                                            .stack_size = kWlanTaskSize,
                                            .priority   = osPriorityAboveNormal7 };
 
-osTimerId_t sDHCPTimer;
 bool hasNotifiedWifiConnectivity = false;
 
 } // namespace
@@ -127,42 +126,12 @@ CHIP_ERROR TriggerDisconnection()
     return CHIP_NO_ERROR;
 }
 
-void DHCPTimerEventHandler(void * arg)
-{
-    WifiPlatformEvent event = WifiPlatformEvent::kStationDhcpPoll;
-    PostWifiPlatformEvent(event);
-}
-
-void CancelDHCPTimer(void)
-{
-    VerifyOrReturn(osTimerIsRunning(sDHCPTimer), ChipLogDetail(DeviceLayer, "CancelDHCPTimer: timer not running"));
-    VerifyOrReturn(osTimerStop(sDHCPTimer) == osOK, ChipLogError(DeviceLayer, "CancelDHCPTimer: failed to stop timer"));
-}
-
-void StartDHCPTimer(uint32_t timeout)
-{
-    // Cancel timer if already started
-    CancelDHCPTimer();
-
-    VerifyOrReturn(osTimerStart(sDHCPTimer, pdMS_TO_TICKS(timeout)) == osOK,
-                   ChipLogError(DeviceLayer, "StartDHCPTimer: failed to start timer"));
-}
-
 void NotifyConnectivity(void)
 {
     VerifyOrReturn(!hasNotifiedWifiConnectivity);
 
     NotifyConnection(wfx_rsi.ap_mac);
     hasNotifiedWifiConnectivity = true;
-}
-
-sl_status_t CreateDHCPTimer()
-{
-    // TODO: Use LWIP timer instead of creating a new one here
-    sDHCPTimer = osTimerNew(DHCPTimerEventHandler, osTimerPeriodic, nullptr, nullptr);
-    VerifyOrReturnError(sDHCPTimer != nullptr, SL_STATUS_ALLOCATION_FAILED);
-
-    return SL_STATUS_OK;
 }
 
 /**
@@ -176,8 +145,12 @@ void ResetDHCPNotificationFlags(void)
 
     ResetIPNotificationStates();
     hasNotifiedWifiConnectivity = false;
-
+#if SLI_SI917
+    // Setting the notify since 917 device got the IP already
+    WifiPlatformEvent event = WifiPlatformEvent::kStationNotify;
+#else
     WifiPlatformEvent event = WifiPlatformEvent::kStationDoDhcp;
+#endif
     PostWifiPlatformEvent(event);
 }
 

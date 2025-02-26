@@ -31,6 +31,7 @@ enum class WifiPlatformEvent : uint8_t
     kStationDoDhcp     = 6,
     kStationDhcpDone   = 7,
     kStationDhcpPoll   = 8,
+    kStationNotify     = 9,
 };
 
 /**
@@ -46,47 +47,12 @@ enum class WifiPlatformEvent : uint8_t
 sl_status_t TriggerPlatformWifiDisconnection();
 
 /**
- * @brief Callback function for the DHCP timer event.
- *
- * TODO: Once the class structure is done, move this to the protected section. Should not be public.
- */
-void DHCPTimerEventHandler(void * arg);
-
-/**
- * @brief Function cancels the DHCP timer if it is running.
- *        If the timer isn't running, function doesn't do anything.
- *
- * TODO: Once the class structure is done, move this to the protected section. Should not be public.
- */
-void CancelDHCPTimer(void);
-
-/**
- * @brief Function starts the DHCP timer with the given timeout.
- *
- * TODO: Once the class structure is done, move this to the protected section. Should not be public.
- *
- * @param timeout timer duration in milliseconds
- */
-void StartDHCPTimer(uint32_t timeout);
-
-/**
  * @brief Reset the flags that are used to notify the application about DHCP connectivity
  *        and emits a WifiPlatformEvent::kStationDoDhcp event to trigger DHCP polling checks.
  *
  * TODO: This function should be moved to the protected section once the class structure is done.
  */
 void ResetDHCPNotificationFlags();
-
-/**
- * @brief Function creates the DHCP timer
- *
- * @note This function is necessary for the time being since the WifiInterface don't leverage inheritance for the time being and as
- *       such don't have access to all data structures. Once the class structure is done, this function will not be necessary
- *       anymore.
- *
- * @return sl_status_t SL_STATUS_OK, the timer was successfully created
- */
-sl_status_t CreateDHCPTimer();
 
 /**
  * @brief Notify the application about the connectivity status if it has not been notified yet.

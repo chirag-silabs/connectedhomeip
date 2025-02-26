@@ -384,7 +384,7 @@ sl_status_t SetWifiConfigurations()
     VerifyOrReturnError(status == SL_STATUS_OK, status,
                         ChipLogError(DeviceLayer, "sl_wifi_set_listen_interval failed: 0x%lx", status));
 
-    sl_wifi_advanced_client_configuration_t client_config = { .max_retry_attempts = 5 };
+    sl_wifi_advanced_client_configuration_t client_config = { .max_retry_attempts = 1 };
     status = sl_wifi_set_advanced_client_configuration(SL_WIFI_CLIENT_INTERFACE, &client_config);
     VerifyOrReturnError(status == SL_STATUS_OK, status,
                         ChipLogError(DeviceLayer, "sl_wifi_set_advanced_client_configuration failed: 0x%lx", status));
@@ -597,48 +597,27 @@ CHIP_ERROR InitWiFiStack(void)
     sWifiEventQueue = osMessageQueueNew(kWfxQueueSize, sizeof(WifiPlatformEvent), nullptr);
     VerifyOrReturnError(sWifiEventQueue != nullptr, CHIP_ERROR_NO_MEMORY);
 
-    status = CreateDHCPTimer();
-    VerifyOrReturnError(status == SL_STATUS_OK, CHIP_ERROR_NO_MEMORY,
-                        ChipLogError(DeviceLayer, "CreateDHCPTimer failed: %lx", status));
-
     return CHIP_NO_ERROR;
 }
 
-void HandleDHCPPolling(void)
+void HandleNotifyConnectivity(void)
 {
-    WifiPlatformEvent event;
-
     // TODO: Notify the application that the interface is not set up or Chipdie here because we are in an unkonwn state
     struct netif * sta_netif = &wifi_client_context.netif;
-    VerifyOrReturn(sta_netif != nullptr, ChipLogError(DeviceLayer, "HandleDHCPPolling: failed to get STA netif"));
+    VerifyOrReturn(sta_netif != nullptr, ChipLogError(DeviceLayer, "HandleNotifyConnectivity: failed to get STA netif"));
 
 #if (CHIP_DEVICE_CONFIG_ENABLE_IPV4)
-    uint8_t dhcp_state = dhcpclient_poll(sta_netif);
-    if (dhcp_state == DHCP_ADDRESS_ASSIGNED && !HasNotifiedIPv4Change())
-    {
-        GotIPv4Address((uint32_t) sta_netif->ip_addr.u_addr.ip4.addr);
-        event = WifiPlatformEvent::kStationDhcpDone;
-        PostWifiPlatformEvent(event);
-        NotifyConnectivity();
-    }
-    else if (dhcp_state == DHCP_OFF)
-    {
-        NotifyIPv4Change(false);
-    }
+    GotIPv4Address((uint32_t) sta_netif->ip_addr.u_addr.ip4.addr);
+    NotifyConnectivity();
 #endif /* CHIP_DEVICE_CONFIG_ENABLE_IPV4 */
     /* Checks if the assigned IPv6 address is preferred by evaluating
      * the first block of IPv6 address ( block 0)
      */
-    if ((ip6_addr_ispreferred(netif_ip6_addr_state(sta_netif, 0))) && !HasNotifiedIPv6Change())
-    {
-        char addrStr[chip::Inet::IPAddress::kMaxStringLength] = { 0 };
-        VerifyOrReturn(ip6addr_ntoa_r(netif_ip6_addr(sta_netif, 0), addrStr, sizeof(addrStr)) != nullptr);
-        ChipLogProgress(DeviceLayer, "SLAAC OK: linklocal addr: %s", addrStr);
-        NotifyIPv6Change(true);
-        event = WifiPlatformEvent::kStationDhcpDone;
-        PostWifiPlatformEvent(event);
-        NotifyConnectivity();
-    }
+    char addrStr[chip::Inet::IPAddress::kMaxStringLength] = { 0 };
+    VerifyOrReturn(ip6addr_ntoa_r(netif_ip6_addr(sta_netif, 0), addrStr, sizeof(addrStr)) != nullptr);
+    ChipLogProgress(DeviceLayer, "SLAAC OK: linklocal addr: %s", addrStr);
+    NotifyIPv6Change(true);
+    NotifyConnectivity();
 }
 
 void PostWifiPlatformEvent(WifiPlatformEvent event)
@@ -752,20 +731,9 @@ void ProcessEvent(WifiPlatformEvent event)
         JoinWifiNetwork();
         break;
 
-    case WifiPlatformEvent::kStationDoDhcp:
-        ChipLogDetail(DeviceLayer, "WifiPlatformEvent::kStationDoDhcp");
-        StartDHCPTimer(WFX_RSI_DHCP_POLL_INTERVAL);
-        break;
-
-    case WifiPlatformEvent::kStationDhcpDone:
-        ChipLogDetail(DeviceLayer, "WifiPlatformEvent::kStationDhcpDone");
-        CancelDHCPTimer();
-        break;
-
-    case WifiPlatformEvent::kStationDhcpPoll:
-        ChipLogDetail(DeviceLayer, "WifiPlatformEvent::kStationDhcpPoll");
-        HandleDHCPPolling();
-        break;
+    case WifiPlatformEvent::kStationNotify:
+        ChipLogDetail(DeviceLayer, "WifiPlatformEvent::kStationNotify");
+        HandleNotifyConnectivity();
 
     default:
         break;

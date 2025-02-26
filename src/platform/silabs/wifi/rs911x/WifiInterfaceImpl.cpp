@@ -60,10 +60,12 @@ using WifiStateFlags = chip::BitFlags<WifiState>;
 
 WfxRsi_t wfx_rsi;
 
-static osThreadId_t sDrvThread;
+namespace {
+
+osThreadId_t sDrvThread;
 constexpr uint32_t kDrvTaskSize = 1792;
-static uint8_t drvStack[kDrvTaskSize];
-static osThread_t sDrvTaskControlBlock;
+uint8_t drvStack[kDrvTaskSize];
+osThread_t sDrvTaskControlBlock;
 osThreadAttr_t kDrvTaskAttr = { .name       = "drv_rsi",
                                 .attr_bits  = osThreadDetached,
                                 .cb_mem     = &sDrvTaskControlBlock,
@@ -72,12 +74,59 @@ osThreadAttr_t kDrvTaskAttr = { .name       = "drv_rsi",
                                 .stack_size = kDrvTaskSize,
                                 .priority   = osPriorityHigh };
 
-static osMessageQueueId_t sWifiEventQueue = NULL;
+osMessageQueueId_t sWifiEventQueue = NULL;
+
+uint8_t wfx_rsi_drv_buf[WFX_RSI_BUF_SZ];
+wfx_wifi_scan_ext_t temp_reset;
+
+osTimerId_t sDHCPTimer;
+
+} //namespace
+
+
 /*
  * This file implements the interface to the RSI SAPIs
  */
-static uint8_t wfx_rsi_drv_buf[WFX_RSI_BUF_SZ];
-static wfx_wifi_scan_ext_t temp_reset;
+
+// TODO: Chirag
+void DHCPTimerEventHandler(void * arg)
+{
+    WifiPlatformEvent event = WifiPlatformEvent::kStationDhcpPoll;
+    PostWifiPlatformEvent(event);
+}
+
+// TODO: Chirag
+void CancelDHCPTimer(void)
+{
+    VerifyOrReturn(osTimerIsRunning(sDHCPTimer), ChipLogDetail(DeviceLayer, "CancelDHCPTimer: timer not running"));
+    VerifyOrReturn(osTimerStop(sDHCPTimer) == osOK, ChipLogError(DeviceLayer, "CancelDHCPTimer: failed to stop timer"));
+}
+
+// TODO: Chirag
+void StartDHCPTimer(uint32_t timeout)
+{
+    // Cancel timer if already started
+    CancelDHCPTimer();
+
+    VerifyOrReturn(osTimerStart(sDHCPTimer, pdMS_TO_TICKS(timeout)) == osOK,
+                   ChipLogError(DeviceLayer, "StartDHCPTimer: failed to start timer"));
+}
+
+// TODO: Chirag
+sl_status_t CreateDHCPTimer()
+{
+    // TODO: Use LWIP timer instead of creating a new one here
+    sDHCPTimer = osTimerNew(DHCPTimerEventHandler, osTimerPeriodic, nullptr, nullptr);
+    VerifyOrReturnError(sDHCPTimer != nullptr, SL_STATUS_ALLOCATION_FAILED);
+
+    return SL_STATUS_OK;
+}
+
+
+
+
+
+
 
 sl_status_t TriggerPlatformWifiDisconnection()
 {
