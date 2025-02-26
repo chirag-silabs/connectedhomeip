@@ -87,21 +87,18 @@ osTimerId_t sDHCPTimer;
  * This file implements the interface to the RSI SAPIs
  */
 
-// TODO: Chirag
 void DHCPTimerEventHandler(void * arg)
 {
     WifiPlatformEvent event = WifiPlatformEvent::kStationDhcpPoll;
     PostWifiPlatformEvent(event);
 }
 
-// TODO: Chirag
 void CancelDHCPTimer(void)
 {
     VerifyOrReturn(osTimerIsRunning(sDHCPTimer), ChipLogDetail(DeviceLayer, "CancelDHCPTimer: timer not running"));
     VerifyOrReturn(osTimerStop(sDHCPTimer) == osOK, ChipLogError(DeviceLayer, "CancelDHCPTimer: failed to stop timer"));
 }
 
-// TODO: Chirag
 void StartDHCPTimer(uint32_t timeout)
 {
     // Cancel timer if already started
@@ -111,7 +108,6 @@ void StartDHCPTimer(uint32_t timeout)
                    ChipLogError(DeviceLayer, "StartDHCPTimer: failed to start timer"));
 }
 
-// TODO: Chirag
 sl_status_t CreateDHCPTimer()
 {
     // TODO: Use LWIP timer instead of creating a new one here
