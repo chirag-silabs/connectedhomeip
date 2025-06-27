@@ -260,6 +260,7 @@ template("siwx917_sdk") {
       "SUPPORT_CPLUSPLUS=1",
       "SLI_SI91X_LWIP_HOSTED_NETWORK_STACK=1",
       "__FREERTOS_OS_WISECONNECT=1",
+      "SL_SI91X_SOC_MODE=1",
 
       # TODO: This is a workaround for the init issue with the SiWx917
       "SL_WLAN_EVENT_THREAD_PRIORITY=osPriorityRealtime6",
@@ -722,7 +723,7 @@ template("siwx917_sdk") {
       "${efr32_sdk_root}/util/third_party/freertos/kernel/event_groups.c",
       "${efr32_sdk_root}/util/third_party/freertos/kernel/list.c",
       "${efr32_sdk_root}/util/third_party/freertos/kernel/portable/GCC/ARM_CM4F/port.c",
-      "${efr32_sdk_root}/util/third_party/freertos/kernel/portable/MemMang/heap_3.c",
+      "${efr32_sdk_root}/util/third_party/freertos/kernel/portable/MemMang/heap_4.c",
       "${efr32_sdk_root}/util/third_party/freertos/kernel/queue.c",
       "${efr32_sdk_root}/util/third_party/freertos/kernel/stream_buffer.c",
       "${efr32_sdk_root}/util/third_party/freertos/kernel/tasks.c",
@@ -762,6 +763,7 @@ template("siwx917_sdk") {
       "${wifi_sdk_root}/components/device/silabs/si91x/wireless/firmware_upgrade/firmware_upgradation.c",
 
       "${wifi_sdk_root}/components/sli_si91x_wifi_event_handler/src/sli_si91x_wifi_event_handler.c",
+      "${wifi_sdk_root}/components/device/silabs/si91x/mcu/core/common/src/malloc_thread_safety.c"
     ]
 
     if (sl_enable_rgb_led) {
